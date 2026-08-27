@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pusheen Space Flight</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #110022;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+        canvas {
+            background: linear-gradient(to bottom, #050515, #220033);
+            box-shadow: 0 0 20px rgba(255, 182, 193, 0.5);
+            border-radius: 8px;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #ffb6c1;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
+        <div id="instructions">Use <strong>UP/DOWN Arrow Keys</strong> or <strong>W/S</strong> to fly. Collect stars! Avoid asteroids!</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Game state variables
+        let score = 0;
+        let gameOver = false;
+        let gameStarted = false;
+
+        // Pusheen Cat Player
+        const player = {
+            x: 100,
+            y: canvas.height / 2 - 25,
+            width: 50,
+            height: 40,
+            speedY: 0,
+            gravity: 0.4,
+            lift: -7
+        };
+
+        // Arrays for obstacles and collectibles
+        let stars = [];
+        let asteroids = [];
+        let spaceDust = [];
+
+        // Input handling
+        const keys = {};
+        window.addEventListener("keydown", (e) => {
+            keys[e.code] = true;
+            if ((e.code === "Space" || e.code === "ArrowUp") && !gameStarted) {
+                gameStarted = true;
+            }
+            if (e.code === "Space" && gameOver) {
+                resetGame();
+            }
+        });
+        window.addEventListener("keyup", (e) => {
+            keys[e.code] = false;
+        });
+
+        function resetGame() {
+            score = 0;
+            player.y = canvas.height / 2 - 25;
+            player.speedY = 0;
+            stars = [];
+            asteroids = [];
+            gameOver = false;
+        }
+
+        // Initialize background starfield/dust
+        for (let i = 0; i < 50; i++) {
+            spaceDust.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2,
+                speed: Math.random() * 2 + 0.5
+            });
+        }
+
+        function spawnObjects() {
+            // Spawn Stars
+            if (Math.random() < 0.03) {
+                stars.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 40),
+                    size: 15,
+                    speed: 3
+                });
+            }
+            // Spawn Asteroids
+            if (Math.random() < 0.02) {
+                asteroids.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 50),
+                    width: 40,
+                    height: 40,
+                    speed: 4
+                });
+            }
+        }
+
+        function update() {
+            if (!gameStarted || gameOver) return;
+
+            // Player movement
+            if (keys["ArrowUp"] || keys["KeyW"]) {
+                player.speedY = player.lift;
+            } else if (keys["ArrowDown"] || keys["KeyS"]) {
+                player.speedY = -player.lift;
+            } else {
+                player.speedY += player.gravity;
+            }
+
+            player.y += player.speedY;
+
+            // Boundary limits
+            if (player.y < 0) player.y = 0;
+            if (player.y + player.height > canvas.height) {
+                player.y = canvas.height - player.height;
+            }
+
+            // Update space dust
+            spaceDust.forEach(dust => {
+                dust.x -= dust.speed;
+                if (dust.x < 0) dust.x = canvas.width;
+            });
+
+            // Update stars
+            for (let i = stars.length - 1; i >= 0; i--) {
+                stars[i].x -= stars[i].speed;
+
+                // Collision with player (collect star)
+                if (
+                    player.x < stars[i].x + stars[i].size &&
+                    player.x + player.width > stars[i].x - stars[i].size &&
+                    player.y < stars[i].y + stars[i].size &&
+                    player.y + player.height > stars[i].y - stars[i].size
+                ) {
+                    score += 10;
+                    stars.splice(i, 1);
+                    continue;
+                }
+
+                // Remove off-screen stars
+                if (stars[i] && stars[i].x < -20) {
+                    stars.splice(i, 1);
+                }
+            }
+
+            // Update asteroids
+            for (let i = asteroids.length - 1; i >= 0; i--) {
+                asteroids[i].x -= asteroids[i].speed;
+
+                // Collision with player (Game Over)
+                if (
+                    player.x < asteroids[i].x + asteroids[i].width &&
+                    player.x + player.width > asteroids[i].x &&
+                    player.y < asteroids[i].y + asteroids[i].height &&
+                    player.y + player.height > asteroids[i].y
+                ) {
+                    gameOver = true;
+                }
+
+                // Remove off-screen asteroids
+                if (asteroids[i] && asteroids[i].x < -50) {
+                    asteroids.splice(i, 1);
+                }
+            }
+
+            spawnObjects();
+        }
+
+        function drawPusheen(x, y) {
+            // Rainbow Trail
+            ctx.fillStyle = "rgba(255, 105, 180, 0.6)";
+            ctx.fillRect(x - 40, y + 10, 40, 20);
+
+            // Pusheen Body (Gray round cat)
+            ctx.fillStyle = "#888888";
+            ctx.beginPath();
+            ctx.ellipse(x + 25, y + 20, 25, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ears
+            ctx.beginPath();
+            ctx.moveTo(x + 10, y + 5);
+            ctx.lineTo(x + 5, y - 10);
+            ctx.lineTo(x + 20, y + 2);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(x + 35, y + 5);
+            ctx.lineTo(x + 40, y - 10);
+            ctx.lineTo(x + 45, y + 2);
+            ctx.fill();
+
+            // Face details (Eyes & Whiskers)
+            ctx.fillStyle = "#222222";
+            ctx.fillRect(x + 18, y + 15, 3, 5);
+            ctx.fillRect(x + 30, y + 15, 3, 5);
+            
+            // Cute little smile
+            ctx.beginPath();
+            ctx.arc(x + 25, y + 22, 3
